@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
-import 'package:shelf_router/shelf_router.dart';
+import 'package:shelf_router/shelf_router.dart' as shelf_router;
 
 import 'handlers/camera_handler.dart';
 import 'handlers/location_handler.dart';
@@ -65,7 +65,7 @@ class _NodeHomePageState extends State<NodeHomePage> {
           .addMiddleware(logRequests())
           .addHandler(_createRouter());
 
-      final port = 7892;
+      const port = 7892;
       _server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
       setState(() {
@@ -85,8 +85,8 @@ class _NodeHomePageState extends State<NodeHomePage> {
     });
   }
 
-  Handler _createRouter() {
-    final router = Router();
+  shelf_router.Handler _createRouter() {
+    final router = shelf_router.Router();
 
     // 状态检查
     router.get('/status', statusHandler);
