@@ -37,9 +37,9 @@ jobs:
       - name: Fix SDK and add permissions
         run: |
           sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle
-          echo '<uses-permission android:name="android.permission.CAMERA" />' >> android/app/src/main/AndroidManifest.xml
-          echo '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' >> android/app/src/main/AndroidManifest.xml
-          echo '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' >> android/app/src/main/AndroidManifest.xml
+          sed -i '/<\/manifest>/i\        <uses-permission android:name="android.permission.CAMERA" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<\/manifest>/i\        <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<\/manifest>/i\        <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
 
       - name: Get dependencies
         run: flutter pub get
