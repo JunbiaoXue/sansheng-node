@@ -21,25 +21,43 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Debug - Check Flutter
+        run: |
+          flutter --version
+          flutter doctor
+
       - name: Generate Android project
         run: |
           rm -rf android
           mkdir -p assets
           mv pubspec.yaml pubspec.yaml.bak
           mv lib lib.bak
-          flutter create --platforms android --org com.openclaw sansheng_node_temp
+          flutter create --platforms android --org com.sansheng sansheng_node_temp
           mv sansheng_node_temp/android .
           rm -rf sansheng_node_temp
           mv lib.bak lib
           mv pubspec.yaml.bak pubspec.yaml
           rm -f pubspec.lock
 
-      - run: flutter pub get
+      - name: Debug - Check project structure
+        run: |
+          echo "=== Files ==="
+          ls -la
+          echo "=== Android ==="
+          ls -la android/
+          echo "=== Lib ==="
+          ls -la lib/
+          echo "=== pubspec ==="
+          head -20 pubspec.yaml
 
-      # 注意：实际设备功能需要真机测试
-      # GitHub Actions 无法访问相机、GPS 等硬件，这里只构建基础框架
+      - name: Get dependencies
+        run: flutter pub get
 
-      - run: flutter build apk --debug
+      - name: Analyze
+        run: flutter analyze || true
+
+      - name: Build APK
+        run: flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
@@ -52,7 +70,7 @@ jobs:
           files: build/app/outputs/flutter-apk/app-debug.apk
           tag_name: latest
           name: 三省六部 Node v1.0.0
-          body: "OpenClaw 安卓节点控制器 - 可控制相机、位置、通知、TTS 等"
+          body: "OpenClaw 安卓节点控制器 - HTTP API 控制手机"
           overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
