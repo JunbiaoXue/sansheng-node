@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'handlers/camera_handler.dart';
 import 'handlers/location_handler.dart';
