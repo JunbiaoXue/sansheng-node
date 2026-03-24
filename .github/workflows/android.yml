@@ -34,13 +34,11 @@ jobs:
           mv pubspec.yaml.bak pubspec.yaml
           rm -f pubspec.lock
 
-      - name: Fix Android SDK version
+      - name: Fix Android SDK version and add permissions
         run: |
           # flutter_tts 需要 minSdk 21
           sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle
-
-      - name: Add Android permissions
-        run: |
+          # 添加权限
           echo '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' >> android/app/src/main/AndroidManifest.xml
           echo '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' >> android/app/src/main/AndroidManifest.xml
           echo '<uses-permission android:name="android.permission.CAMERA" />' >> android/app/src/main/AndroidManifest.xml
