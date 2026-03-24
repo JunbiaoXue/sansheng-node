@@ -134,7 +134,7 @@ class _NodeHomePageState extends State<NodeHomePage> {
       if (response.statusCode == 200) {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        _addLog('DEBUG poll resp: \$response');  // debug
+        _addLog('DEBUG poll resp: \${response.body}');  // debug
         final cmdRaw = data['command'];
         _addLog('DEBUG cmdRaw: \$cmdRaw (\${cmdRaw.runtimeType})');  // debug
         if (cmdRaw != null) {
