@@ -24,6 +24,8 @@ dependencies:
   # 文件
   path_provider: ^2.1.2
   image_picker: ^1.0.4
+  # 定位
+  geolocator: ^11.0.0
 
 dev_dependencies:
   flutter_test:
