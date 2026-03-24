@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:http/http.dart' as http;
 
 import 'handlers/camera_handler.dart';
 import 'handlers/location_handler.dart';
@@ -40,149 +39,93 @@ class NodeHomePage extends StatefulWidget {
 }
 
 class _NodeHomePageState extends State<NodeHomePage> {
-  final _gatewayController = TextEditingController(
-    text: 'ws://118.145.117.25:7891',
+  // 服务器地址列表（手机主动连接这些服务器获取命令）
+  final _serverController = TextEditingController(
+    text: 'http://118.145.117.25:7891',
   );
+  
   bool _connected = false;
-  String _status = '点击连接 Gateway';
-  WebSocketChannel? _channel;
-  StreamSubscription? _subscription;
-  final _pendingRequests = <String, Completer<Map<String, dynamic>>>{};
-
+  String _status = '点击「连接」开始';
+  String _lastResult = '';
+  Timer? _pollTimer;
+  final List<String> _logs = [];
+  
   // 设备信息
   final _deviceId = 'sansheng-node-${DateTime.now().millisecondsSinceEpoch}';
 
   @override
   void dispose() {
-    _subscription?.cancel();
-    _channel?.sink.close();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _connect() async {
-    final gatewayUrl = _gatewayController.text.trim();
-    if (gatewayUrl.isEmpty) {
-      setState(() => _status = '请输入 Gateway 地址');
+  Future<void> _startPolling() async {
+    final server = _serverController.text.trim();
+    if (server.isEmpty) {
+      setState(() => _status = '请输入服务器地址');
       return;
     }
 
-    setState(() => _status = '正在连接...');
+    setState(() => _status = '正在连接服务器...');
 
+    // 测试服务器是否可达
     try {
-      // 连接 WebSocket
-      _channel = WebSocketChannel.connect(Uri.parse(gatewayUrl));
-
-      _subscription = _channel!.stream.listen(
-        _onMessage,
-        onError: (error) {
-          setState(() {
-            _connected = false;
-            _status = '连接错误: $error';
-          });
-        },
-        onDone: () {
-          setState(() {
-            _connected = false;
-            _status = '连接已断开';
-          });
-        },
-      );
-
-      // 等待连接完成
-      await Future.delayed(const Duration(seconds: 2));
-
-      if (_channel != null) {
-        setState(() {
-          _connected = true;
-          _status = '已连接到 Gateway\n设备ID: $_deviceId';
+      final testUrl = '$server/api/live-status';
+      final response = await http.get(
+        Uri.parse(testUrl),
+      ).timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        _connected = true;
+        setState(() => _status = '✅ 已连接到服务器\n设备ID: $_deviceId');
+        
+        // 开始轮询命令
+        _pollTimer?.cancel();
+        _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+          _pollCommands();
         });
+        
+        _addLog('服务器连接成功');
+      } else {
+        setState(() => _status = '服务器响应异常: ${response.statusCode}');
       }
     } catch (e) {
       setState(() => _status = '连接失败: $e');
+      _addLog('连接失败: $e');
     }
   }
 
-  void _onMessage(dynamic message) {
+  Future<void> _pollCommands() async {
+    if (!_connected) return;
+    
+    final server = _serverController.text.trim();
     try {
-      final data = jsonDecode(message as String);
-      final type = data['type'] as String?;
-
-      if (type == 'event') {
-        final event = data['event'] as String?;
-        if (event == 'connect.challenge') {
-          _handleChallenge(data['payload']);
+      // 从服务器获取待执行的命令
+      // 这个接口需要服务器配合实现
+      final url = '$server/api/node/$_deviceId/poll';
+      final response = await http.get(
+        Uri.parse(url),
+      ).timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['command'] != null) {
+          await _executeCommand(data['command'], data['id']);
         }
-      } else if (type == 'res') {
-        final id = data['id'] as String?;
-        if (id != null && _pendingRequests.containsKey(id)) {
-          _pendingRequests[id]!.complete(data);
-          _pendingRequests.remove(id);
-        }
-      } else if (type == 'invoke') {
-        _handleInvoke(data);
       }
     } catch (e) {
-      debugPrint('消息解析错误: $e');
+      // 轮询失败不影响连接状态
     }
   }
 
-  Future<void> _handleChallenge(Map<String, dynamic> payload) async {
-    final nonce = payload['nonce'] as String;
-    final timestamp = payload['ts'] as int;
-
-    // 发送 connect 请求（作为 node）
-    final requestId = _generateId();
-    final connectRequest = {
-      'type': 'req',
-      'id': requestId,
-      'method': 'connect',
-      'params': {
-        'minProtocol': 3,
-        'maxProtocol': 3,
-        'client': {
-          'id': 'sansheng-node',
-          'version': '1.0.0',
-          'platform': 'android',
-          'mode': 'node',
-        },
-        'role': 'node',
-        'scopes': [],
-        'caps': ['camera', 'location', 'notifications', 'tts', 'screen'],
-        'commands': [
-          'camera.snap',
-          'location.get',
-          'notifications.list',
-          'notifications.send',
-          'tts.speak',
-          'screen.capture',
-        ],
-        'permissions': {
-          'camera.capture': true,
-          'location.get': true,
-          'notifications.list': true,
-          'notifications.send': true,
-          'tts.speak': true,
-          'screen.capture': true,
-        },
-        'auth': {'token': ''},  // 简化处理
-        'locale': 'zh-CN',
-        'userAgent': 'SanshengNode/1.0.0',
-        'device': {
-          'id': _deviceId,
-        },
-      },
-    };
-
-    _channel?.sink.add(jsonEncode(connectRequest));
-  }
-
-  Future<void> _handleInvoke(Map<String, dynamic> invoke) async {
-    final id = invoke['id'] as String?;
-    final command = invoke['command'] as String?;
-    final args = invoke['args'] as Map<String, dynamic>? ?? {};
-
+  Future<void> _executeCommand(Map<String, dynamic> cmd, String cmdId) async {
+    final command = cmd['command'] as String?;
+    final args = cmd['args'] as Map<String, dynamic>? ?? {};
+    
+    _addLog('执行命令: $command');
+    
+    String result;
     try {
-      String result;
       switch (command) {
         case 'camera.snap':
           result = await _handleCamera(args);
@@ -203,35 +146,43 @@ class _NodeHomePageState extends State<NodeHomePage> {
           result = await _handleScreenCapture(args);
           break;
         default:
-          result = jsonEncode({'error': 'Unknown command: $command'});
+          result = jsonEncode({'success': false, 'message': 'Unknown command'});
       }
-
-      // 发送响应
-      final response = {
-        'type': 'invoke-res',
-        'id': id,
-        'ok': true,
-        'result': jsonDecode(result),
-      };
-      _channel?.sink.add(jsonEncode(response));
+      
+      // 上报结果给服务器
+      await _reportResult(cmdId, result);
     } catch (e) {
-      final response = {
-        'type': 'invoke-res',
-        'id': id,
-        'ok': false,
-        'error': e.toString(),
-      };
-      _channel?.sink.add(jsonEncode(response));
+      await _reportResult(cmdId, jsonEncode({'success': false, 'error': e.toString()}));
+    }
+  }
+
+  Future<void> _reportResult(String cmdId, String result) async {
+    final server = _serverController.text.trim();
+    try {
+      final url = '$server/api/node/$_deviceId/result';
+      await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'id': cmdId,
+          'deviceId': _deviceId,
+          'result': result,
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      ).timeout(const Duration(seconds: 5));
+      
+      _addLog('结果已上报');
+      setState(() => _lastResult = result);
+    } catch (e) {
+      _addLog('上报失败: $e');
     }
   }
 
   Future<String> _handleCamera(Map<String, dynamic> args) async {
-    // 相机处理（需要真机测试）
     return jsonEncode({'success': false, 'message': '相机功能需要真机测试'});
   }
 
   Future<String> _handleLocation(Map<String, dynamic> args) async {
-    // 位置处理
     return jsonEncode({'success': false, 'message': 'GPS 功能需要真机测试'});
   }
 
@@ -251,18 +202,20 @@ class _NodeHomePageState extends State<NodeHomePage> {
     return jsonEncode({'success': false, 'message': '截图功能需要真机测试'});
   }
 
-  void _disconnect() {
-    _subscription?.cancel();
-    _channel?.sink.close();
-    _channel = null;
-    setState(() {
-      _connected = false;
-      _status = '已断开连接';
-    });
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _connected = false;
+    setState(() => _status = '已停止连接');
+    _addLog('连接已停止');
   }
 
-  String _generateId() {
-    return '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(10000)}';
+  void _addLog(String msg) {
+    final now = TimeOfDay.now();
+    setState(() {
+      _logs.insert(0, '[${now.hour}:${now.minute.toString().padLeft(2,'0')}] $msg');
+      if (_logs.length > 10) _logs.removeLast();
+    });
   }
 
   @override
@@ -277,35 +230,35 @@ class _NodeHomePageState extends State<NodeHomePage> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // Gateway 配置
+            // 服务器配置
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('🔗 Gateway 地址',
+                    const Text('🖥️ 服务器地址',
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     TextField(
-                      controller: _gatewayController,
+                      controller: _serverController,
                       decoration: const InputDecoration(
-                        hintText: 'ws://118.145.117.25:7891',
+                        hintText: 'http://118.145.117.25:7891',
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text('手机连接到太子所在服务器',
+                    Text('手机主动连接服务器获取命令',
                         style: TextStyle(fontSize: 12, color: Colors.grey[400])),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // 连接状态
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _connected ? Colors.green.shade900 : Colors.grey.shade800,
                 borderRadius: BorderRadius.circular(12),
@@ -313,68 +266,84 @@ class _NodeHomePageState extends State<NodeHomePage> {
               child: Column(
                 children: [
                   Icon(
-                    _connected ? Icons.check_circle : Icons.circle_outlined,
-                    size: 48,
+                    _connected ? Icons.cloud_done : Icons.cloud_off,
+                    size: 40,
                     color: _connected ? Colors.green : Colors.grey,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Text(
                     _status,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 14),
+                    style: const TextStyle(fontSize: 13),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // 连接/断开按钮
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _connected ? null : _connect,
-                    icon: const Icon(Icons.link),
+                    onPressed: _connected ? null : _startPolling,
+                    icon: const Icon(Icons.play_arrow),
                     label: const Text('连接'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(14),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _connected ? _disconnect : null,
-                    icon: const Icon(Icons.link_off),
+                    onPressed: _connected ? _stopPolling : null,
+                    icon: const Icon(Icons.stop),
                     label: const Text('断开'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(14),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // 可用功能
+            // 最新结果
+            if (_lastResult.isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade800,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('📋 最新执行结果:',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Text(_lastResult, style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+
+            // 日志
+            const SizedBox(height: 12),
             const Expanded(
               child: Card(
                 child: Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('📋 支持的命令',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      SizedBox(height: 12),
-                      Text('camera.snap - 拍照'),
-                      Text('location.get - 获取位置'),
-                      Text('notifications.list - 通知列表'),
-                      Text('notifications.send - 发送通知'),
-                      Text('tts.speak - 文字转语音'),
-                      Text('screen.capture - 屏幕截图'),
+                      Text('📜 日志',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      SizedBox(height: 8),
+                      Text('等待连接...', style: TextStyle(color: Colors.grey)),
                     ],
                   ),
                 ),
