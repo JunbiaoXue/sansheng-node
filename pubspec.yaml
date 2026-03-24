@@ -12,27 +12,19 @@ dependencies:
   # HTTP 服务
   shelf: ^1.4.1
   shelf_router: ^1.1.4
-  # 相机
-  camera: ^0.10.5+9
-  # 位置
-  geolocator: ^11.0.0
+  # 权限
   permission_handler: ^11.1.0
   # 通知
   flutter_local_notifications: ^16.3.0
   # TTS
   flutter_tts: ^3.8.5
-  # 文件/截图
+  # 文件
   path_provider: ^2.1.2
-  screenshot: ^2.1.0
-  # JSON
-  json_annotation: ^4.8.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
-  build_runner: ^2.4.8
-  json_serializable: ^6.7.1
 
 flutter:
   uses-material-design: true
