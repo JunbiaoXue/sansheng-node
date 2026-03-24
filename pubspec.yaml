@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # WebSocket 连接
+  web_socket_channel: ^2.4.0
   # HTTP 服务
   shelf: ^1.4.1
   shelf_router: ^1.1.4
