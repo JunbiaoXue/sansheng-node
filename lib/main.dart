@@ -51,7 +51,7 @@ class _NodeHomePageState extends State<NodeHomePage> {
   final List<String> _logs = [];
   
   // 设备信息 - 使用固定ID方便测试
-  final _deviceId = 'sansheng-node-${DateTime.now().millisecondsSinceEpoch}';
+  final _deviceId = 'phone-001';
 
   @override
   void dispose() {
