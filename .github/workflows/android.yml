@@ -39,6 +39,15 @@ jobs:
           # flutter_tts 需要 minSdk 21
           sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle
 
+      - name: Add Android permissions
+        run: |
+          echo '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' >> android/app/src/main/AndroidManifest.xml
+          echo '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' >> android/app/src/main/AndroidManifest.xml
+          echo '<uses-permission android:name="android.permission.CAMERA" />' >> android/app/src/main/AndroidManifest.xml
+        run: |
+          # flutter_tts 需要 minSdk 21
+          sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle
+
       - name: Get dependencies
         run: flutter pub get
 
