@@ -133,11 +133,14 @@ class _NodeHomePageState extends State<NodeHomePage> {
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['command'] != null) {
-          _addLog('📋 收到命令: ${data['command']['command']}');
-          // 生成临时ID
+        final cmdRaw = data['command'];
+        if (cmdRaw != null) {
+          // 支持两种格式：字符串或对象
+          final command = cmdRaw is String ? cmdRaw : (cmdRaw as Map<String, dynamic>)['command'] as String? ?? '';
+          final args = cmdRaw is Map<String, dynamic> ? (cmdRaw as Map<String, dynamic>)['args'] as Map<String, dynamic>? ?? <String, dynamic>{} : <String, dynamic>{};
+          _addLog('📋 收到命令: $command');
           final cmdId = 'cmd_${DateTime.now().millisecondsSinceEpoch}';
-          await _executeCommand(data['command'], cmdId);
+          await _executeCommand({'command': command, 'args': args}, cmdId);
         }
         // else: 没有命令，安静轮询
       } else {
