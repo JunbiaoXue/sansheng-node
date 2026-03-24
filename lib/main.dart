@@ -263,6 +263,7 @@ class _NodeHomePageState extends State<NodeHomePage> {
       });
     } catch (e) {
       return jsonEncode({'success': false, 'message': '定位失败: $e'});
+  }
     }
 
   Future<String> _handleNotificationsList(Map<String, dynamic> args) async {
