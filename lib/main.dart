@@ -50,13 +50,22 @@ class _NodeHomePageState extends State<NodeHomePage> {
   Timer? _pollTimer;
   final List<String> _logs = [];
   
-  // 设备信息
+  // 设备信息 - 使用固定ID方便测试
   final _deviceId = 'sansheng-node-${DateTime.now().millisecondsSinceEpoch}';
 
   @override
   void dispose() {
     _pollTimer?.cancel();
     super.dispose();
+  }
+
+  void _addLog(String msg) {
+    final now = TimeOfDay.now();
+    final time = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      _logs.insert(0, '[$time] $msg');
+      if (_logs.length > 50) _logs.removeLast();
+    });
   }
 
   Future<void> _startPolling() async {
@@ -67,17 +76,22 @@ class _NodeHomePageState extends State<NodeHomePage> {
     }
 
     setState(() => _status = '正在连接服务器...');
+    _addLog('尝试连接: $server');
 
     // 测试服务器是否可达
     try {
       final testUrl = '$server/api/live-status';
+      _addLog('测试: $testUrl');
+      
       final response = await http.get(
         Uri.parse(testUrl),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 10));
+      
+      _addLog('响应状态: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         _connected = true;
-        setState(() => _status = '✅ 已连接到服务器\n设备ID: $_deviceId');
+        setState(() => _status = '✅ 已连接\n设备ID: $_deviceId');
         
         // 开始轮询命令
         _pollTimer?.cancel();
@@ -85,14 +99,25 @@ class _NodeHomePageState extends State<NodeHomePage> {
           _pollCommands();
         });
         
-        _addLog('服务器连接成功');
+        _addLog('✅ 连接成功，开始轮询');
       } else {
         setState(() => _status = '服务器响应异常: ${response.statusCode}');
+        _addLog('❌ 服务器响应异常: ${response.statusCode}');
       }
-    } catch (e) {
+    } catch (e, st) {
+      _addLog('❌ 连接失败: $e');
       setState(() => _status = '连接失败: $e');
-      _addLog('连接失败: $e');
     }
+  }
+
+  Future<void> _stopPolling() async {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _connected = false;
+    setState(() {
+      _status = '点击「连接」开始';
+    });
+    _addLog('已断开连接');
   }
 
   Future<void> _pollCommands() async {
@@ -100,21 +125,25 @@ class _NodeHomePageState extends State<NodeHomePage> {
     
     final server = _serverController.text.trim();
     try {
-      // 从服务器获取待执行的命令
-      // 这个接口需要服务器配合实现
       final url = '$server/api/node/$_deviceId/poll';
       final response = await http.get(
         Uri.parse(url),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 10));
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['command'] != null) {
-          await _executeCommand(data['command'], data['id']);
+          _addLog('📋 收到命令: ${data['command']['command']}');
+          // 生成临时ID
+          final cmdId = 'cmd_${DateTime.now().millisecondsSinceEpoch}';
+          await _executeCommand(data['command'], cmdId);
         }
+        // else: 没有命令，安静轮询
+      } else {
+        _addLog('⚠️ poll失败: ${response.statusCode}');
       }
     } catch (e) {
-      // 轮询失败不影响连接状态
+      _addLog('⚠️ poll异常: $e');
     }
   }
 
@@ -122,7 +151,7 @@ class _NodeHomePageState extends State<NodeHomePage> {
     final command = cmd['command'] as String?;
     final args = cmd['args'] as Map<String, dynamic>? ?? {};
     
-    _addLog('执行命令: $command');
+    _addLog('⚡ 执行: $command');
     
     String result;
     try {
@@ -146,12 +175,13 @@ class _NodeHomePageState extends State<NodeHomePage> {
           result = await _handleScreenCapture(args);
           break;
         default:
-          result = jsonEncode({'success': false, 'message': 'Unknown command'});
+          result = jsonEncode({'success': false, 'message': 'Unknown command: $command'});
       }
       
-      // 上报结果给服务器
+      _addLog('✅ 执行完成: $result');
       await _reportResult(cmdId, result);
-    } catch (e) {
+    } catch (e, st) {
+      _addLog('❌ 执行异常: $e');
       await _reportResult(cmdId, jsonEncode({'success': false, 'error': e.toString()}));
     }
   }
@@ -169,12 +199,12 @@ class _NodeHomePageState extends State<NodeHomePage> {
           'result': result,
           'timestamp': DateTime.now().toIso8601String(),
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 10));
       
-      _addLog('结果已上报');
+      _addLog('📤 结果已上报');
       setState(() => _lastResult = result);
     } catch (e) {
-      _addLog('上报失败: $e');
+      _addLog('⚠️ 上报失败: $e');
     }
   }
 
@@ -202,57 +232,30 @@ class _NodeHomePageState extends State<NodeHomePage> {
     return jsonEncode({'success': false, 'message': '截图功能需要真机测试'});
   }
 
-  void _stopPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
-    _connected = false;
-    setState(() => _status = '已停止连接');
-    _addLog('连接已停止');
-  }
-
-  void _addLog(String msg) {
-    final now = TimeOfDay.now();
-    setState(() {
-      _logs.insert(0, '[${now.hour}:${now.minute.toString().padLeft(2,'0')}] $msg');
-      if (_logs.length > 10) _logs.removeLast();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('📱 三省六部 Node'),
+        title: const Text('三省六部 Node'),
         centerTitle: true,
-        backgroundColor: Colors.amber.shade800,
+        backgroundColor: Colors.indigo.shade800,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 服务器配置
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('🖥️ 服务器地址',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _serverController,
-                      decoration: const InputDecoration(
-                        hintText: 'http://118.145.117.25:7891',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('手机主动连接服务器获取命令',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-                  ],
+            // 服务器地址输入
+            TextField(
+              controller: _serverController,
+              decoration: InputDecoration(
+                labelText: '服务器地址',
+                hintText: 'http://118.145.117.25:7891',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                prefixIcon: const Icon(Icons.cloud),
               ),
+              keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 16),
 
@@ -333,17 +336,32 @@ class _NodeHomePageState extends State<NodeHomePage> {
 
             // 日志
             const SizedBox(height: 12),
-            const Expanded(
+            Expanded(
               child: Card(
                 child: Padding(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('📜 日志',
+                      const Text('📜 日志',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      SizedBox(height: 8),
-                      Text('等待连接...', style: TextStyle(color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: _logs.isEmpty
+                            ? const Text('等待连接...', style: TextStyle(color: Colors.grey))
+                            : ListView.builder(
+                                itemCount: _logs.length,
+                                itemBuilder: (context, index) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      _logs[index],
+                                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
                     ],
                   ),
                 ),
