@@ -4,15 +4,20 @@ import 'package:shelf/shelf.dart';
 
 final FlutterLocalNotificationsPlugin _notificationsPlugin =
     FlutterLocalNotificationsPlugin();
+bool _notifInitialized = false;
+
+Future<void> _ensureInit() async {
+  if (!_notifInitialized) {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidSettings);
+    await _notificationsPlugin.initialize(initSettings);
+    _notifInitialized = true;
+  }
+}
 
 Future<Response> notificationListHandler(Request request) async {
   try {
-    // 初始化插件（如果尚未初始化）
-    if (!_notificationsPlugin.isInitialized()) {
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const initSettings = InitializationSettings(android: androidSettings);
-      await _notificationsPlugin.initialize(initSettings);
-    }
+    await _ensureInit();
 
     // 获取活动通知
     final notifications = await _notificationsPlugin
