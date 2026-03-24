@@ -4,24 +4,38 @@ import 'package:shelf/shelf.dart';
 
 final FlutterLocalNotificationsPlugin _notificationsPlugin =
     FlutterLocalNotificationsPlugin();
+bool _notifInitialized = false;
+
+Future<void> _ensureInit() async {
+  if (!_notifInitialized) {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidSettings);
+    await _notificationsPlugin.initialize(initSettings);
+    _notifInitialized = true;
+  }
+}
 
 Future<Response> sendNotificationHandler(Request request) async {
   try {
-    final body = await request.readAsString();
-    final data = jsonDecode(body);
+    await _ensureInit();
 
-    final title = data['title'] ?? '来自三少六部';
-    final message = data['message'] ?? '';
-    final channelId = data['channel_id'] ?? 'default';
-
-    // 初始化
-    if (!_notificationsPlugin.isInitialized()) {
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const initSettings = InitializationSettings(android: androidSettings);
-      await _notificationsPlugin.initialize(initSettings);
+    String body;
+    try {
+      body = await request.readAsString();
+    } catch (_) {
+      body = '';
     }
 
-    // 发送通知
+    String title = '来自三少六部';
+    String message = '';
+    try {
+      final data = jsonDecode(body);
+      title = data['title'] ?? title;
+      message = data['message'] ?? '';
+    } catch (_) {
+      message = body;
+    }
+
     const androidDetails = AndroidNotificationDetails(
       'default_channel',
       '默认通知',
