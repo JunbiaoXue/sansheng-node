@@ -132,19 +132,23 @@ class _NodeHomePageState extends State<NodeHomePage> {
       ).timeout(const Duration(seconds: 10));
       
       if (response.statusCode == 200) {
+      if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        _addLog('DEBUG poll resp: \$response');  // debug
         final cmdRaw = data['command'];
+        _addLog('DEBUG cmdRaw: \$cmdRaw (\${cmdRaw.runtimeType})');  // debug
         if (cmdRaw != null) {
           // 支持两种格式：字符串或对象
           final command = cmdRaw is String ? cmdRaw : (cmdRaw as Map<String, dynamic>)['command'] as String? ?? '';
           final args = cmdRaw is Map<String, dynamic> ? (cmdRaw as Map<String, dynamic>)['args'] as Map<String, dynamic>? ?? <String, dynamic>{} : <String, dynamic>{};
-          _addLog('📋 收到命令: $command');
-          final cmdId = 'cmd_${DateTime.now().millisecondsSinceEpoch}';
+          _addLog('📋 收到命令: \$command');
+          final cmdId = 'cmd_\${DateTime.now().millisecondsSinceEpoch}';
           await _executeCommand({'command': command, 'args': args}, cmdId);
         }
         // else: 没有命令，安静轮询
       } else {
-        _addLog('⚠️ poll失败: ${response.statusCode}');
+        _addLog('⚠️ poll失败: \${response.statusCode}');
+      }
       }
     } catch (e) {
       _addLog('⚠️ poll异常: $e');
