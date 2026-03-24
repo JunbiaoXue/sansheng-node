@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -210,43 +210,35 @@ class _NodeHomePageState extends State<NodeHomePage> {
   }
 
   Future<String> _handleCamera(Map<String, dynamic> args) async {
-    return jsonEncode({'success': false, 'message': '相机功能需要真机测试'});
-  }
-
-  Future<String> _handleLocation(Map<String, dynamic> args) async {
     try {
-      // 检查权限
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return jsonEncode({'success': false, 'message': '定位权限被拒绝'});
-        }
-      }
-      
-      if (permission == LocationPermission.deniedForever) {
-        return jsonEncode({'success': false, 'message': '定位权限被永久拒绝，请在设置中开启'});
-      }
-      
-      // 获取位置
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
+      final picker = ImagePicker();
+      final XFile? photo = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
       );
+      
+      if (photo == null) {
+        return jsonEncode({'success': false, 'message': '用户取消了拍照'});
+      }
+      
+      // 读取图片bytes并转为base64（用于传输）
+      final bytes = await photo.readAsBytes();
+      final base64Image = base64Encode(bytes);
       
       return jsonEncode({
         'success': true,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'altitude': position.altitude,
-        'accuracy': position.accuracy,
-        'speed': position.speed,
+        'message': '拍照成功',
+        'filename': photo.name,
+        'size': bytes.length,
+        'base64': base64Image,
       });
     } catch (e) {
-      return jsonEncode({'success': false, 'message': '获取位置失败: $e'});
+      return jsonEncode({'success': false, 'message': '拍照失败: $e'});
     }
+  }
+
+  Future<String> _handleLocation(Map<String, dynamic> args) async {
+    return jsonEncode({'success': false, 'message': '定位功能开发中，需要额外配置'});
   }
 
   Future<String> _handleNotificationsList(Map<String, dynamic> args) async {
