@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -213,7 +214,39 @@ class _NodeHomePageState extends State<NodeHomePage> {
   }
 
   Future<String> _handleLocation(Map<String, dynamic> args) async {
-    return jsonEncode({'success': false, 'message': 'GPS 功能需要真机测试'});
+    try {
+      // 检查权限
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return jsonEncode({'success': false, 'message': '定位权限被拒绝'});
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        return jsonEncode({'success': false, 'message': '定位权限被永久拒绝，请在设置中开启'});
+      }
+      
+      // 获取位置
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      
+      return jsonEncode({
+        'success': true,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'altitude': position.altitude,
+        'accuracy': position.accuracy,
+        'speed': position.speed,
+      });
+    } catch (e) {
+      return jsonEncode({'success': false, 'message': '获取位置失败: $e'});
+    }
   }
 
   Future<String> _handleNotificationsList(Map<String, dynamic> args) async {
