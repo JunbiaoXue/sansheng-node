@@ -85,7 +85,7 @@ class _NodeHomePageState extends State<NodeHomePage> {
     });
   }
 
-  shelf_router.Handler _createRouter() {
+  Handler _createRouter() {
     final router = shelf_router.Router();
 
     // 状态检查
