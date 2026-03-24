@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import 'handlers/camera_handler.dart';
 import 'handlers/location_handler.dart';
@@ -209,9 +210,31 @@ class _NodeHomePageState extends State<NodeHomePage> {
   }
 
   Future<String> _handleCamera(Map<String, dynamic> args) async {
-    // 注意：相机功能需要额外的包和权限配置
-    // 当前版本返回占位信息
-    return jsonEncode({'success': false, 'message': '相机功能开发中', 'note': '需要image_picker包'});
+    try {
+      final picker = ImagePicker();
+      final XFile? photo = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+      
+      if (photo == null) {
+        return jsonEncode({'success': false, 'message': '用户取消了拍照'});
+      }
+      
+      // 读取图片bytes
+      final bytes = await photo.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      
+      return jsonEncode({
+        'success': true,
+        'message': '拍照成功',
+        'filename': photo.name,
+        'size': bytes.length,
+        'base64': base64Image,
+      });
+    } catch (e) {
+      return jsonEncode({'success': false, 'message': '拍照失败: $e'});
+    }
   }
 
   Future<String> _handleLocation(Map<String, dynamic> args) async {
