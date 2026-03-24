@@ -37,9 +37,6 @@ jobs:
       - name: Fix SDK and add permissions
         run: |
           sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle
-          echo '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' >> android/app/src/main/AndroidManifest.xml
-          echo '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' >> android/app/src/main/AndroidManifest.xml
-          echo '<uses-permission android:name="android.permission.CAMERA" />' >> android/app/src/main/AndroidManifest.xml
 
       - name: Get dependencies
         run: flutter pub get
