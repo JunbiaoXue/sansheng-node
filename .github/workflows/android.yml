@@ -1,0 +1,58 @@
+name: Build Sansheng Node APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.6'
+          channel: 'stable'
+          cache: true
+
+      - name: Generate Android project
+        run: |
+          rm -rf android
+          mkdir -p assets
+          mv pubspec.yaml pubspec.yaml.bak
+          mv lib lib.bak
+          flutter create --platforms android --org com.openclaw sansheng_node_temp
+          mv sansheng_node_temp/android .
+          rm -rf sansheng_node_temp
+          mv lib.bak lib
+          mv pubspec.yaml.bak pubspec.yaml
+          rm -f pubspec.lock
+
+      - run: flutter pub get
+
+      # 注意：实际设备功能需要真机测试
+      # GitHub Actions 无法访问相机、GPS 等硬件，这里只构建基础框架
+
+      - run: flutter build apk --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sansheng-node-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+      - uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          files: build/app/outputs/flutter-apk/app-debug.apk
+          tag_name: latest
+          name: 三省六部 Node v1.0.0
+          body: "OpenClaw 安卓节点控制器 - 可控制相机、位置、通知、TTS 等"
+          overwrite: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
