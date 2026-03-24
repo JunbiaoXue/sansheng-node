@@ -21,11 +21,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Debug - Check Flutter
-        run: |
-          flutter --version
-          flutter doctor
-
       - name: Generate Android project
         run: |
           rm -rf android
@@ -39,22 +34,13 @@ jobs:
           mv pubspec.yaml.bak pubspec.yaml
           rm -f pubspec.lock
 
-      - name: Debug - Check project structure
+      - name: Fix Android SDK version
         run: |
-          echo "=== Files ==="
-          ls -la
-          echo "=== Android ==="
-          ls -la android/
-          echo "=== Lib ==="
-          ls -la lib/
-          echo "=== pubspec ==="
-          head -20 pubspec.yaml
+          # flutter_tts 需要 minSdk 21
+          sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle
 
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze || true
 
       - name: Build APK
         run: flutter build apk --debug
